@@ -2,21 +2,11 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-11 09:40:41
+ * @ Modified Time: 2021-08-12 21:52:10
  * @ Description  : Web Server主程序
  */
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
 #include <fcntl.h>
-#include <stdlib.h>
-#include <cassert>
-#include <sys/epoll.h>
 
 #include "../include/locker.h"
 #include "../include/threadpool.h"
@@ -57,7 +47,7 @@ int main(int argc, char* argv[]) {
 
     /* 忽略SIGPIPE信号 */
     addsig(SIGPIPE, SIG_IGN);
-
+    
     /* 创建线程池 */
     threadpool< http_conn >* pool = NULL;
     try {

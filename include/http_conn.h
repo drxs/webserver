@@ -2,24 +2,26 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-11 09:47:45
+ * @ Modified Time: 2021-08-12 21:51:06
  * @ Description  : http逻辑任务处理 头文件
  */
 
 #ifndef HTTPCONNECTION_H
 #define HTTPCONNECTION_H
 
+#include <cassert>
+#include <cstring>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstdarg>
+#include <string>
+
+#include <strings.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
-#include <assert.h>
-#include <cstring>
-#include <strings.h>
-#include <pthread.h>
-#include <cstdio>
-#include <cstdlib>
-#include <stdarg.h>
-#include <errno.h>
 
 #include <sys/types.h>
 #include <sys/epoll.h>
@@ -88,6 +90,7 @@ private:
     /* 客户请求的目标文件完整路径 */
     char m_real_file[FILENAME_LEN];
     char* m_url;            /* 目标文件的文件名 */
+    std::string m_file_type;      /* 目标文件的类型 */
     char* m_version;        /* http协议版本号，只支持http/1.1 */   
     char* m_host;           /* 主机名 */
     int m_content_length;   /* http请求的消息体长度 */
@@ -129,15 +132,12 @@ private:
 
     /* 下面一组函数被process_write调用以填充http应答 */
     void unmap();
+    void get_file_type();   /* 获取文件类型 */
     bool add_response(const char* format, ...);
-    bool add_content(const char* content);
     bool add_status_line(int status, const char* title);
-    bool add_headers(int content_length);
-    bool add_content_length(int content_length);
-    bool add_linger();
-    bool add_server();
-    bool add_blank_line();
-    
+    void add_headers(int content_length);
+    bool add_content(const char* content);
+
 };
 
 #endif
