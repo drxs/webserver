@@ -2,7 +2,7 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-12 21:52:10
+ * @ Modified Time: 2021-08-13 15:44:23
  * @ Description  : Web Server主程序
  */
 
@@ -11,12 +11,16 @@
 #include "../include/locker.h"
 #include "../include/threadpool.h"
 #include "../include/http_conn.h"
+#include "../include/log.h"
 
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
 
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
+
+/* 定义文件名,用于记录日志 */
+const string this_file = "main.cpp";
 
 void addsig(int sig, void(handler)(int), bool restart = true) {
     struct sigaction sa;
@@ -30,12 +34,17 @@ void addsig(int sig, void(handler)(int), bool restart = true) {
     assert(sigaction(sig, &sa, NULL) != -1);
 }
 
-void show_error(int connfd, const char* info) {
-    printf("%s", info);
-    send(connfd, info, strlen(info), 0);
-    close(connfd);
+void* log_thread(void* arg){
+    LOG* t = reinterpret_cast<LOG*>(arg);
+    t->run();
+    return nullptr;
 }
 
+/* 校验 ip port 合法性 */
+bool check_ip_port(const char* ip, int port){
+    auto it = inet_addr(ip);
+    return (it != INADDR_NONE) && (port <= 65535);
+}
 
 int main(int argc, char* argv[]) {
     if(argc < 3) {
@@ -45,25 +54,45 @@ int main(int argc, char* argv[]) {
     const char* ip = argv[1];
     int port = atoi(argv[2]);
 
+    /* 创建日志线程  log_ 已在log.h中声明为extern */
+    pthread_t log_tid;
+    pthread_create(&log_tid, nullptr, log_thread, log_);
+    pthread_detach(log_tid);
+
+    /* 校验ip地址和端口号 */
+    if(!check_ip_port(ip, port)){
+        log_->log("err", this_file , __LINE__, "Ip address or port number is not available");
+        return 1;
+    }
+
+    log_->log("msg", this_file , __LINE__, "---------- Server is running! ----------");
+
     /* 忽略SIGPIPE信号 */
     addsig(SIGPIPE, SIG_IGN);
     
     /* 创建线程池 */
     threadpool< http_conn >* pool = NULL;
     try {
+        log_->log("msg", this_file , __LINE__, "Try to create threadpool......");
         pool = new threadpool< http_conn >;
     }
     catch(...) {
+        log_->log("err", this_file , __LINE__, "Failed to create threadpool!");
         return 1;
     }
-
+    log_->log("msg", this_file , __LINE__, "Succeed in creating threadpool!");
     /* 预先对每个可能的客户连接分配一个http_conn对象 */
     http_conn* users = new http_conn[MAX_FD];
-    assert(users);
+    if(!users){
+        log_->log("err", this_file , __LINE__, "Failed to create users[]!");
+        return 1; 
+    }
     //int user_count = 0;
 
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
-    assert(listenfd >= 0);
+    if(listenfd < 0){
+        log_->log("err", this_file , __LINE__, "Failed to create socket!");
+    }
 
     /* 使close系统调用立即返回 */
     struct linger tmp = { 1, 0 };
@@ -77,10 +106,14 @@ int main(int argc, char* argv[]) {
 
     int ret = 0;
     ret = bind(listenfd, (struct sockaddr*)&address, sizeof(address));
-    assert(ret >= 0);
+    if(ret < 0){
+        log_->log("err", this_file , __LINE__, "Bind error!");
+    }
 
     ret = listen(listenfd, 5);
-    assert(ret >= 0);
+    if(ret < 0){
+        log_->log("err", this_file , __LINE__, "Listen error!");
+    }
 
     epoll_event events[MAX_EVENT_NUMBER];
     int epollfd = epoll_create(5);
@@ -91,7 +124,7 @@ int main(int argc, char* argv[]) {
     while(true) {
         int number = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
         if ((number < 0) && (errno != EINTR)) {
-            printf("epoll failure\n");
+            log_->log("err", this_file , __LINE__, "Epoll error!");
             break;
         }
 
@@ -102,19 +135,21 @@ int main(int argc, char* argv[]) {
                 socklen_t client_addrlength = sizeof(client_address);
                 int connfd = accept(listenfd, (struct sockaddr*)&client_address, &client_addrlength);
                 if (connfd < 0) {
-                    printf("errno is: %d\n", errno);
+                    log_->log("err", this_file , __LINE__, "Accept error!");
                     continue;
                 }
                 if(http_conn::m_user_count >= MAX_FD) {
-                    show_error(connfd, "Internal server busy");
+                    const char *info = "Internal server busy";
+                    printf("%s",info);
+                    send(connfd, info, strlen(info), 0);
+                    close(connfd);
+                    log_->log("err", this_file , __LINE__, string(info));
                     continue;
                 }
                 char str[16];
-                /* 输出客户端ip地址和端口号 */
-                printf("new --- new client connection, ip: %s, port: %d\n",
-                    inet_ntop(AF_INET, &client_address.sin_addr.s_addr, str, sizeof(str)),
-                    ntohs(client_address.sin_port));
-
+                string cli_info = "new client, ip: " + string(inet_ntop(AF_INET, &client_address.sin_addr.s_addr, str, sizeof(str)))
+                    + ", port: " + std::to_string(ntohs(client_address.sin_port));
+                log_->log("new", this_file , __LINE__, cli_info);
                 /* 初始化客户连接 */
                 users[connfd].init(connfd, client_address);
             }

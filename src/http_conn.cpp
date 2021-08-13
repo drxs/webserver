@@ -2,7 +2,7 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-12 22:24:27
+ * @ Modified Time: 2021-08-13 15:41:04
  * @ Description  : http逻辑任务处理
  */
 
@@ -14,6 +14,7 @@
 #include "../include/locker.h"
 #include "../include/http_conn.h"
 #include "../include/http_content_type.h"
+#include "../include/log.h"
 
 using std::string;
 using std::unordered_map;
@@ -30,10 +31,13 @@ const char* error_500_title = "Internal Error";
 const char* error_500_form = "There was an unusual problem serving the requested file.\n";
 
 /* 定义服务器名称，用于填充响应字段 */
-const char* server_name = "Server: WangYusong's Server / v0.2.0(Linux)\r\n";
+const char* server_name = "Server: WangYusong's Server / v0.3.0(Linux)\r\n";
 
 /* ----------网站根目录---------- */
 const char* doc_root = "/var/www";
+
+/* 定义文件名,用于记录日志 */
+const string this_file = "http_conn.cpp";
 
 /* 将文件描述符设置为非阻塞
  * 每个使用Epoll ET模式的文件描述符都应该是非阻塞的，
@@ -93,9 +97,7 @@ string urlEncode(const string& str) {
     string strTemp = "";  
     size_t length = str.length();  
     for (size_t i = 0; i < length; i++)  {  
-        if (isalnum((unsigned char)str[i]) ||   
-            (str[i] == '-') ||  (str[i] == '_') ||               
-            (str[i] == '.') ||  (str[i] == '~'))  
+        if (isalnum((unsigned char)str[i]) || strchr("/_.-~",str[i]) != (char*)0 )  
             strTemp += str[i];  
         else if (str[i] == ' ')  
             strTemp += "+";  
@@ -132,7 +134,7 @@ int http_conn::m_epollfd = -1;
 void http_conn::close_conn(bool real_close) {
     if(real_close && (m_sockfd != -1)) {
         removefd(m_epollfd, m_sockfd);
-        printf("------------socket %d closed\n",m_sockfd);
+        log_->log("msg", this_file, __LINE__, "Connection closed.");
         m_sockfd = -1;
         m_user_count--;     /* 关闭连接时，用户数量减1 */
     }
@@ -227,8 +229,7 @@ bool http_conn::read() {
             return false;
         }
         else if (bytes_read == 0) {
-            /* ----------------------------------------- */
-            printf("connection closed by client\n");
+            log_->log("msg", this_file, __LINE__, "Connection closed by client.");
             return false;
         }
         m_read_idx += bytes_read;
@@ -361,7 +362,6 @@ http_conn::HTTP_CODE http_conn::process_read() {
         /* 记录下一行的起始位置 */
         m_start_line = m_checked_idx;
 
-        //printf("got 1 http line: %s\n", text);
         switch (m_check_state) {
             case CHECK_STATE_REQUESTLINE: {
                 /* 第一个状态：分析请求行 */ 
@@ -408,18 +408,30 @@ http_conn::HTTP_CODE http_conn::do_request() {
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
     strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
+
+    string info ="file or dir: [ " + string(m_real_file) + " ] was visited! ";
+    
+    
     if (stat(m_real_file, &m_file_stat) < 0){   /* 目标文件不存在 */
+        info += "[ not found ]";
+        log_->log("msg", this_file, __LINE__, info);    /* 文件被访问,记录到日志 */
         return NO_RESOURCE;
     }
 
     if (! (m_file_stat.st_mode & S_IROTH)) {    /* 无访问权限 */
+        info += "[ no permission ]";
+        log_->log("msg", this_file, __LINE__, info);    /* 文件被访问,记录到日志 */
         return FORBIDDEN_REQUEST;
     }
 
     if (S_ISDIR(m_file_stat.st_mode)) {         /* 目标文件为目录，访问错误 */
+        info += "[ dir, failed to visit ]";
+        log_->log("msg", this_file, __LINE__, info);    /* 文件被访问,记录到日志 */
         return BAD_REQUEST;
     }
 
+    info += "[ ok ]";
+    log_->log("msg", this_file, __LINE__, info);    /* 文件被访问,记录到日志 */
     /* 打开文件，mmap到m_file_address */
     int fd = open(m_real_file, O_RDONLY);
     m_file_address = (char*)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
