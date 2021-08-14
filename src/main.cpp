@@ -2,7 +2,7 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-13 15:44:23
+ * @ Modified Time: 2021-08-14 09:42:28
  * @ Description  : Web Server主程序
  */
 
@@ -46,6 +46,32 @@ bool check_ip_port(const char* ip, int port){
     return (it != INADDR_NONE) && (port <= 65535);
 }
 
+/* 创建守护进程 */
+void daemon_func(){
+    pid_t pid;
+    pid = fork();
+    if(pid > 0){  //父进程终止
+        exit(0);    
+    }
+    if(pid < 0){
+        printf("daemon error!\n");
+        exit(1);
+    }
+    //子进程
+    pid = setsid();   //创建新会话
+    if(pid == -1){
+        printf("setsid error!\n");
+        exit(1);
+    }
+    int fd = open("/dev/null",O_RDWR);  //fd->0
+    if(fd == -1){
+        printf("deamon /dev/null open error\n");
+    }
+    dup2(fd, STDIN_FILENO);
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+}
+
 int main(int argc, char* argv[]) {
     if(argc < 3) {
         printf("usage: %s ip  port\n", basename(argv[0]));
@@ -62,8 +88,12 @@ int main(int argc, char* argv[]) {
     /* 校验ip地址和端口号 */
     if(!check_ip_port(ip, port)){
         log_->log("err", this_file , __LINE__, "Ip address or port number is not available");
+        printf("Ip address or port number is not available!\n");
         return 1;
     }
+
+    /* 创建守护进程 */
+    daemon_func();
 
     log_->log("msg", this_file , __LINE__, "---------- Server is running! ----------");
 
@@ -81,6 +111,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     log_->log("msg", this_file , __LINE__, "Succeed in creating threadpool!");
+    
     /* 预先对每个可能的客户连接分配一个http_conn对象 */
     http_conn* users = new http_conn[MAX_FD];
     if(!users){
@@ -140,7 +171,6 @@ int main(int argc, char* argv[]) {
                 }
                 if(http_conn::m_user_count >= MAX_FD) {
                     const char *info = "Internal server busy";
-                    printf("%s",info);
                     send(connfd, info, strlen(info), 0);
                     close(connfd);
                     log_->log("err", this_file , __LINE__, string(info));

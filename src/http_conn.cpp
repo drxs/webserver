@@ -2,7 +2,7 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-13 15:41:04
+ * @ Modified Time: 2021-08-14 09:43:16
  * @ Description  : http逻辑任务处理
  */
 
@@ -31,7 +31,7 @@ const char* error_500_title = "Internal Error";
 const char* error_500_form = "There was an unusual problem serving the requested file.\n";
 
 /* 定义服务器名称，用于填充响应字段 */
-const char* server_name = "Server: WangYusong's Server / v0.3.0(Linux)\r\n";
+const char* server_name = "Server: WangYusong's Server / v0.3.3(Linux)\r\n";
 
 /* ----------网站根目录---------- */
 const char* doc_root = "/var/www";
@@ -409,7 +409,7 @@ http_conn::HTTP_CODE http_conn::do_request() {
     int len = strlen(doc_root);
     strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
 
-    string info ="file or dir: [ " + string(m_real_file) + " ] was visited! ";
+    string info ="visit file or dir: [ " + string(m_real_file) + " ] ";
     
     
     if (stat(m_real_file, &m_file_stat) < 0){   /* 目标文件不存在 */

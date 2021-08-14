@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(WebServer VERSION 0.3.0)
+project(WebServer VERSION 0.3.3)
 
 set(CMAKE_CXX_FLAGS "${CAMKE_CXX_FLAGS} -std=c++14 -O3 -pthread -Wall")
 
