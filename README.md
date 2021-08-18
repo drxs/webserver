@@ -10,7 +10,7 @@
 
 - 支持**日志系统**，记录服务器运行情况及资源访问情况；
 
-- usage： ./WebServer ip port
+- usage： ./WebServer port
 
 - 默认网站根目录(src/http_conn.cpp: line-37)：/var/www
 
@@ -25,7 +25,31 @@ cd build
 cmake ..
 make
 
-./WebServer 127.0.0.1 8989
+./WebServer 8989
+```
+
+## 文件结构
+```
+.
+├── build                       #构建目录
+│   └── readme.md               #编译命令说明
+├── CMakeLists.txt              #cmake
+├── include                     #头文件目录   
+│   ├── http_conn.h             #http逻辑处理 头文件
+│   ├── http_content_type.h     #记录http content-type文件类型
+│   ├── locker.h                #封装线程同步机制
+│   ├── log.h                   #日志系统 头文件
+│   ├── threadpool.h            #线程池
+│   └── timer.h                 #定时器 时间堆（小顶堆） 头文件
+├── LICENSE
+├── README.md                   #项目说明文档
+└── src                         #源文件目录
+    ├── http_conn.cpp           #http逻辑处理
+    ├── log.cpp                 #日志系统
+    ├── main.cpp                #主函数
+    └── timer.cpp               #时间堆（小顶堆）
+
+3 directories, 14 files
 ```
 
 ## 运行截图 & 详细介绍 & 开发计划
@@ -33,6 +57,14 @@ make
 <a href = "https://www.wangyusong.cn/archives/851.html" target = "_blank"> 点击访问 -->【基于EPOLL边沿触发（ET模式）和线程池的Web服务器 - 独人欣赏】 </a>
 
 ## 版本历史
+- 2021-08-18 --- v0.5.0
+  - 新增：定时器模块，定时发出信号，由独立的线程调用相应的回调函数;
+  - 优化：降低LOG::get_time()函数的执行频率，由定时器控制每60秒执行一次；
+  - 优化：去除独立的日志线程，改由定时器定时将日志数据写入文件；
+  - 优化：大幅降低使用write系统调用的次数，提升运行效率；
+  - 优化：代码及部分注释清理、优化；
+- 2021-08-15 --- v0.3.5
+  - 优化：自动获取服务器ip地址，无需在运行时手动输入；
 - 2021-08-14 --- v0.3.3
   - 新增：守护进程，服务器启动后将脱离终端，在后台运行；
   - 优化：日志模块，写文件之前判断日志文件是否存在，若不存在则重新创建；
@@ -46,5 +78,5 @@ make
   - 修复：修复文件内容为中文时的乱码问题（未指定字符集）；
   - 优化：代码清理；
 - 2021-08-11 --- v0.1.0
-  - 初始版本：《Linux高性能服务器编程》讲解代码
+  - 初始版本：《Linux高性能服务器编程》示例代码
 

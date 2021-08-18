@@ -2,7 +2,7 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-14 09:43:16
+ * @ Modified Time: 2021-08-18 09:05:26
  * @ Description  : http逻辑任务处理
  */
 
@@ -31,7 +31,7 @@ const char* error_500_title = "Internal Error";
 const char* error_500_form = "There was an unusual problem serving the requested file.\n";
 
 /* 定义服务器名称，用于填充响应字段 */
-const char* server_name = "Server: WangYusong's Server / v0.3.3(Linux)\r\n";
+const char* server_name = "Server: WangYusong's Server / v0.5.0(Linux)\r\n";
 
 /* ----------网站根目录---------- */
 const char* doc_root = "/var/www";
