@@ -2,11 +2,12 @@
  * @ Author: WangYusong
  * @ E-Mail: admin@wangyusong.cn
  * @ Create Time  : 2021-08-10 19:54:18
- * @ Modified Time: 2021-08-14 09:42:28
+ * @ Modified Time: 2021-08-18 20:46:29
  * @ Description  : Web Server主程序
  */
 
 #include <fcntl.h>
+#include <signal.h>
 
 #include "../include/locker.h"
 #include "../include/threadpool.h"
@@ -34,83 +35,68 @@ void addsig(int sig, void(handler)(int), bool restart = true) {
     assert(sigaction(sig, &sa, NULL) != -1);
 }
 
-void* log_thread(void* arg){
-    LOG* t = reinterpret_cast<LOG*>(arg);
-    t->run();
-    return nullptr;
-}
-
-/* 校验 ip port 合法性 */
-bool check_ip_port(const char* ip, int port){
-    auto it = inet_addr(ip);
-    return (it != INADDR_NONE) && (port <= 65535);
-}
-
-/* 创建守护进程 */
-void daemon_func(){
-    pid_t pid;
-    pid = fork();
-    if(pid > 0){  //父进程终止
-        exit(0);    
+/* 信号处理 */
+static void* signal_handle(void* arg){
+    sigset_t * mask = (sigset_t *)arg;
+    int sig = 0;
+    while(true){
+        if (sigwait(mask,&sig) != 0){
+            log_->log("msg", this_file, __LINE__, "----- signal error -----");
+            continue;
+        }
+        if(sig == SIGALRM){
+            timer_->tick();
+            alarm(TIMESLOT);   /* 一次alarm只会产生1次SIGALRM信号,因此要重新定时 */
+        }        
     }
-    if(pid < 0){
-        printf("daemon error!\n");
-        exit(1);
-    }
-    //子进程
-    pid = setsid();   //创建新会话
-    if(pid == -1){
-        printf("setsid error!\n");
-        exit(1);
-    }
-    int fd = open("/dev/null",O_RDWR);  //fd->0
-    if(fd == -1){
-        printf("deamon /dev/null open error\n");
-    }
-    dup2(fd, STDIN_FILENO);
-    dup2(fd, STDOUT_FILENO);
-    dup2(fd, STDERR_FILENO);
 }
 
 int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        printf("usage: %s ip  port\n", basename(argv[0]));
+    if(argc < 2) {
+        printf("usage: %s port \n", basename(argv[0]));
         return 1;
     }
-    const char* ip = argv[1];
-    int port = atoi(argv[2]);
-
-    /* 创建日志线程  log_ 已在log.h中声明为extern */
-    pthread_t log_tid;
-    pthread_create(&log_tid, nullptr, log_thread, log_);
-    pthread_detach(log_tid);
-
-    /* 校验ip地址和端口号 */
-    if(!check_ip_port(ip, port)){
-        log_->log("err", this_file , __LINE__, "Ip address or port number is not available");
-        printf("Ip address or port number is not available!\n");
-        return 1;
-    }
+    int port = atoi(argv[1]);
 
     /* 创建守护进程 */
-    daemon_func();
+    int ret = daemon(1,0);
+    if(ret != 0){
+        printf("daemon error!\n");
+        exit(1);
+    }
+
+    /* 信号处理 */
+    sigset_t mask;
+    sigfillset(&mask);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+
+    /* 创建线程,负责信号处理 */
+    pthread_t sig_pid;
+    pthread_create(&sig_pid, 0, signal_handle, &mask);
+    pthread_detach(sig_pid);
+   
+    /* 检验端口号是否合法 */
+    if(port > 65535 || port <= 0){
+        log_->log("err", this_file , __LINE__, "Port number is not available");
+        return 1;
+    }
 
     log_->log("msg", this_file , __LINE__, "---------- Server is running! ----------");
 
-    /* 忽略SIGPIPE信号 */
-    addsig(SIGPIPE, SIG_IGN);
+    /* 定时 */
+    alarm(TIMESLOT);
     
     /* 创建线程池 */
     threadpool< http_conn >* pool = NULL;
     try {
         log_->log("msg", this_file , __LINE__, "Try to create threadpool......");
-        pool = new threadpool< http_conn >;
+        pool = new threadpool< http_conn >(8);  /* 初始创建8个线程 */
     }
     catch(...) {
         log_->log("err", this_file , __LINE__, "Failed to create threadpool!");
         return 1;
     }
-    log_->log("msg", this_file , __LINE__, "Succeed in creating threadpool!");
+    log_->log("msg", this_file , __LINE__, "Succeed in creating threadpool!(8 threads)");
     
     /* 预先对每个可能的客户连接分配一个http_conn对象 */
     http_conn* users = new http_conn[MAX_FD];
@@ -132,10 +118,9 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in address;
     bzero(&address, sizeof(address));
     address.sin_family = AF_INET;
-    inet_pton(AF_INET, ip, &address.sin_addr);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);    /* 自动获取服务器ip地址 */
     address.sin_port = htons(port);
 
-    int ret = 0;
     ret = bind(listenfd, (struct sockaddr*)&address, sizeof(address));
     if(ret < 0){
         log_->log("err", this_file , __LINE__, "Bind error!");

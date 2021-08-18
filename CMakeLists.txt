@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(WebServer VERSION 0.3.3)
+project(WebServer VERSION 0.5.0)
 
 set(CMAKE_CXX_FLAGS "${CAMKE_CXX_FLAGS} -std=c++14 -O3 -pthread -Wall")
 
@@ -11,6 +11,7 @@ link_libraries(pthread)
 include_directories(${PROJECT_SOURCE_DIR}/include/)
 
 set(source_files
+    src/timer.cpp
     src/log.cpp
     src/http_conn.cpp
     src/main.cpp
